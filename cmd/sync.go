@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"grove/internal/git"
-	"grove/internal/manager"
+	"github.com/vedantprajapati/Grove/internal/git"
+	"github.com/vedantprajapati/Grove/internal/manager"
 	"path/filepath"
 
 	"github.com/spf13/cobra"

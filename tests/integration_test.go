@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"grove/internal/manager"
+	"github.com/vedantprajapati/Grove/internal/manager"
 	"os"
 	"os/exec"
 	"path/filepath"

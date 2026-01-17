@@ -2,8 +2,8 @@ package manager
 
 import (
 	"fmt"
-	"grove/internal/config"
-	"grove/internal/git"
+	"github.com/vedantprajapati/Grove/internal/config"
+	"github.com/vedantprajapati/Grove/internal/git"
 	"io"
 	"os"
 	"path/filepath"

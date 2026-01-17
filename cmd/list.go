@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"grove/internal/manager"
+	"github.com/vedantprajapati/Grove/internal/manager"
 	"path/filepath"
 	"runtime"
 

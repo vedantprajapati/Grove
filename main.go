@@ -1,7 +1,7 @@
 package main
 
 import (
-	"grove/cmd"
+	"github.com/vedantprajapati/Grove/cmd"
 )
 
 func main() {
