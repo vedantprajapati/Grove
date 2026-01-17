@@ -1,0 +1,19 @@
+[project]
+name = "grove"
+version = "0.1.0"
+description = "A CLI tool to manage git worktrees across multiple repositories simultaneously"
+authors = [
+    {name = "User", email = "user@example.com"},
+]
+dependencies = [
+    "typer[all]>=0.9.0",
+    "rich>=13.0.0",
+]
+requires-python = ">=3.8"
+
+[project.scripts]
+gr = "grove.main:app"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
