@@ -1,4 +1,4 @@
-module grove
+module github.com/vedantprajapati/Grove
 
 go 1.21
 
