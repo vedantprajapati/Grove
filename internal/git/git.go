@@ -6,19 +6,39 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // RunGit executes a git command in the specified directory.
 func RunGit(cwd string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	if cwd != "" {
-		cmd.Dir = cwd
+	var output []byte
+	var err error
+
+	// Retry up to 3 times for lock errors or transient fs issues
+	for i := 0; i < 3; i++ {
+		cmd := exec.Command("git", args...)
+		if cwd != "" {
+			cmd.Dir = cwd
+		}
+		output, err = cmd.CombinedOutput()
+
+		// Success
+		if err == nil {
+			return strings.TrimSpace(string(output)), nil
+		}
+
+		// Check for lock file errors to decide if we should retry
+		outStr := string(output)
+		if strings.Contains(outStr, "index.lock") || strings.Contains(outStr, "lock file") {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		// If it's not a lock error, fail immediately
+		break
 	}
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("git command failed: %s\nOutput: %s", strings.Join(args, " "), string(output))
-	}
-	return strings.TrimSpace(string(output)), nil
+
+	return "", fmt.Errorf("git command failed: %s\nOutput: %s", strings.Join(args, " "), string(output))
 }
 
 // GetRepoNameFromURL extracts the repository name from a URL.
