@@ -10,8 +10,13 @@ import (
 var switchCmd = &cobra.Command{
 	Use:   "switch [feature]",
 	Short: "Switch to a feature workspace",
-	Long: `Output the path of the feature workspace. 
-Use with shell alias: cd $(gr switch my-feature)`,
+	Long: `Switch to a feature workspace directory.
+
+To enable directory switching, add this to your shell config (~/.bashrc or ~/.zshrc):
+  eval "$(gr init)"
+
+Then you can use:
+  gr switch my-feature`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		mgr, err := manager.NewManager()
