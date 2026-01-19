@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 )
 
 type Manager struct {
@@ -107,18 +109,37 @@ func (m *Manager) CreateFeature(setName, featureName string) error {
 		return fmt.Errorf("failed to create feature directory: %v", err)
 	}
 
-	// 1. Git Operations
+	// 1. Git Operations (Parallel)
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(set.Repos))
+
 	for _, repoURL := range set.Repos {
-		bareRepo, err := git.EnsureBareRepo(repoURL, cacheDir)
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			bareRepo, err := git.EnsureBareRepo(url, cacheDir)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to ensure bare repo for %s: %v", url, err)
+				return
+			}
+
+			repoName := git.GetRepoNameFromURL(url)
+			targetPath := filepath.Join(featurePath, repoName)
+
+			fmt.Printf("Adding worktree for %s...\n", repoName)
+			if err := git.CreateWorktree(bareRepo, featureName, targetPath); err != nil {
+				errChan <- err
+				return
+			}
+		}(repoURL)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Collect first error if any
+	for err := range errChan {
 		if err != nil {
-			return fmt.Errorf("failed to ensure bare repo for %s: %v", repoURL, err)
-		}
-
-		repoName := git.GetRepoNameFromURL(repoURL)
-		targetPath := filepath.Join(featurePath, repoName)
-
-		fmt.Printf("Adding worktree for %s...\n", repoName)
-		if err := git.CreateWorktree(bareRepo, featureName, targetPath); err != nil {
 			return err
 		}
 	}
@@ -137,6 +158,136 @@ func (m *Manager) CreateFeature(setName, featureName string) error {
 	return m.SaveConfig()
 }
 
+func (m *Manager) SyncFeature(featureName string) error {
+	feat, ok := m.Config.Features[featureName]
+	if !ok {
+		return fmt.Errorf("feature '%s' not found", featureName)
+	}
+
+	set, ok := m.Config.Sets[feat.Set]
+	if !ok {
+		return fmt.Errorf("set '%s' not found for feature", feat.Set)
+	}
+
+	fmt.Printf("Syncing feature '%s' (Set: %s) in parallel...\n", featureName, feat.Set)
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(set.Repos))
+
+	for _, repoURL := range set.Repos {
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			repoName := git.GetRepoNameFromURL(url)
+			repoPath := filepath.Join(feat.Path, repoName)
+			if err := git.SyncRepo(repoPath); err != nil {
+				errChan <- fmt.Errorf("error syncing %s: %v", repoName, err)
+			} else {
+				fmt.Printf("  %s synced.\n", repoName)
+			}
+		}(repoURL)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	var errors []string
+	for err := range errChan {
+		errors = append(errors, err.Error())
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("sync failed for some repositories:\n%s", strings.Join(errors, "\n"))
+	}
+
+	return nil
+}
+
+func (m *Manager) ExecFeature(featureName string, command string, args []string) error {
+	feat, ok := m.Config.Features[featureName]
+	if !ok {
+		return fmt.Errorf("feature '%s' not found", featureName)
+	}
+
+	set, ok := m.Config.Sets[feat.Set]
+	if !ok {
+		return fmt.Errorf("set '%s' not found for feature", feat.Set)
+	}
+
+	fmt.Printf("Executing '%s %s' across %d repos...\n", command, strings.Join(args, " "), len(set.Repos))
+
+	var wg sync.WaitGroup
+	for _, repoURL := range set.Repos {
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			repoName := git.GetRepoNameFromURL(url)
+			repoPath := filepath.Join(feat.Path, repoName)
+
+			fmt.Printf("\n--- [%s] ---\n", repoName)
+			output, err := git.RunCommand(repoPath, command, args...)
+			if err != nil {
+				fmt.Printf("Error in %s: %v\nOutput: %s\n", repoName, err, output)
+			} else {
+				fmt.Println(output)
+			}
+		}(repoURL)
+	}
+
+	wg.Wait()
+	return nil
+}
+
+type RepoStatus struct {
+	Name    string
+	Branch  string
+	IsDirty bool
+	ABC     string // Ahead/Behind Count
+}
+
+func (m *Manager) GetFeatureStatus(featureName string) ([]RepoStatus, error) {
+	feat, ok := m.Config.Features[featureName]
+	if !ok {
+		return nil, fmt.Errorf("feature '%s' not found", featureName)
+	}
+
+	set, ok := m.Config.Sets[feat.Set]
+	if !ok {
+		return nil, fmt.Errorf("set '%s' not found for feature", feat.Set)
+	}
+
+	var wg sync.WaitGroup
+	statusChan := make(chan RepoStatus, len(set.Repos))
+
+	for _, repoURL := range set.Repos {
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			repoName := git.GetRepoNameFromURL(url)
+			repoPath := filepath.Join(feat.Path, repoName)
+
+			branch, _ := git.BranchName(repoPath)
+			isDirty, abc, _ := git.GetStatus(repoPath)
+
+			statusChan <- RepoStatus{
+				Name:    repoName,
+				Branch:  branch,
+				IsDirty: isDirty,
+				ABC:     abc,
+			}
+		}(repoURL)
+	}
+
+	wg.Wait()
+	close(statusChan)
+
+	var statuses []RepoStatus
+	for s := range statusChan {
+		statuses = append(statuses, s)
+	}
+	return statuses, nil
+}
+
 func (m *Manager) RemoveFeature(featureName string) error {
 	feat, ok := m.Config.Features[featureName]
 	if !ok {
@@ -145,24 +296,23 @@ func (m *Manager) RemoveFeature(featureName string) error {
 
 	fmt.Printf("Removing feature '%s'...\n", featureName)
 
-	// 1. Remove Worktrees
+	// 1. Remove Worktrees (Parallel cleanup)
 	cacheDir := m.CacheDir
-
-	// We need to know which repos were in this feature.
-	// We iterate over the Set definition associated with the feature.
 	if set, ok := m.Config.Sets[feat.Set]; ok {
+		var wg sync.WaitGroup
 		for _, repoURL := range set.Repos {
-			repoName := git.GetRepoNameFromURL(repoURL)
-			bareRepo := filepath.Join(cacheDir, repoName)
-			worktreeStr := filepath.Join(feat.Path, repoName)
-
-			// Try to remove from bare repo
-			// Note: If folder was deleted manually, this might fail, but git worktree prune handles it.
-			// We force remove.
-			if err := git.RemoveWorktree(bareRepo, worktreeStr); err != nil {
-				fmt.Printf("  Warning: failed to clean worktree for %s: %v\n", repoName, err)
-			}
+			wg.Add(1)
+			go func(url string) {
+				defer wg.Done()
+				repoName := git.GetRepoNameFromURL(url)
+				bareRepo := filepath.Join(cacheDir, repoName)
+				worktreeStr := filepath.Join(feat.Path, repoName)
+				if err := git.RemoveWorktree(bareRepo, worktreeStr); err != nil {
+					fmt.Printf("  Warning: failed to clean worktree for %s: %v\n", repoName, err)
+				}
+			}(repoURL)
 		}
+		wg.Wait()
 	}
 
 	// 2. Remove Directory

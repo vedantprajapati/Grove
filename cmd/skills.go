@@ -21,13 +21,13 @@ var skillsListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		
+
 		setName := args[0]
 		set, ok := mgr.Config.Sets[setName]
 		if !ok {
 			return fmt.Errorf("set '%s' not found", setName)
 		}
-		
+
 		fmt.Printf("Skills directory for '%s': %s\n", setName, set.SkillsDir)
 		return nil
 	},
@@ -42,24 +42,24 @@ var skillsSetDirCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		
+
 		setName := args[0]
 		path := args[1]
-		
+
 		// Validate set exists
 		set, ok := mgr.Config.Sets[setName]
 		if !ok {
 			return fmt.Errorf("set '%s' not found", setName)
 		}
-		
+
 		// Update path
 		set.SkillsDir = path
 		mgr.Config.Sets[setName] = set
-		
+
 		if err := mgr.SaveConfig(); err != nil {
 			return err
 		}
-		
+
 		fmt.Printf("Skills directory for '%s' updated to %s\n", setName, path)
 		return nil
 	},

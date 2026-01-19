@@ -64,9 +64,21 @@ cd (gr switch new-login-flow)
 ```
 
 ### 5. Sync Changes
-Pull updates for all repositories in a feature.
+Pull updates for all repositories in a feature (Parallel).
 ```bash
 gr sync new-login-flow
+```
+
+### 6. Execute Parallel Commands
+Run a command across all repositories in a feature workspace simultaneously.
+```bash
+gr exec new-login-flow -- npm install
+```
+
+### 7. Check Feature Status
+See a dashboard of the current branch, dirty status, and sync state for all repositories.
+```bash
+gr status new-login-flow
 ```
 
 ## Configuration

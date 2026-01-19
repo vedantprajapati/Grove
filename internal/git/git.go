@@ -41,6 +41,19 @@ func RunGit(cwd string, args ...string) (string, error) {
 	return "", fmt.Errorf("git command failed: %s\nOutput: %s", strings.Join(args, " "), string(output))
 }
 
+// RunCommand executes an arbitrary command in the specified directory.
+func RunCommand(cwd string, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	if cwd != "" {
+		cmd.Dir = cwd
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // GetRepoNameFromURL extracts the repository name from a URL.
 // e.g., git@github.com:user/repo.git -> repo
 // e.g., C:\Users\user\repo -> repo
@@ -133,19 +146,50 @@ func RemoveWorktree(barePath, worktreePath string) error {
 func SyncRepo(worktreePath string) error {
 	// Verify it is a git repo
 	if _, err := os.Stat(filepath.Join(worktreePath, ".git")); os.IsNotExist(err) {
-		return fmt.Errorf("not a git repository: %s", worktreePath)
+		// Worktrees have a .git file, not a directory. os.Stat handles both.
 	}
 
 	fmt.Printf("Syncing %s...\n", worktreePath)
-	if _, err := RunGit(worktreePath, "fetch"); err != nil {
-		return err
+	if _, err := RunGit(worktreePath, "fetch", "--all"); err != nil {
+		return fmt.Errorf("fetch failed: %v", err)
+	}
+
+	// Check if upstream exists
+	_, err := RunGit(worktreePath, "rev-parse", "--abbrev-ref", "@{u}")
+	if err != nil {
+		// No upstream, just fetch is fine
+		fmt.Printf("  No upstream for %s, skipped pull.\n", worktreePath)
+		return nil
 	}
 
 	// Attempt pull (which is fetch + merge)
-	// If there are local changes, this might fail or require rebase.
-	// We'll do a simple pull.
 	if _, err := RunGit(worktreePath, "pull"); err != nil {
 		return fmt.Errorf("pull failed in %s: %v", worktreePath, err)
 	}
 	return nil
+}
+
+// GetStatus returns the status of a repository (dirty/clean and ahead/behind).
+func GetStatus(repoPath string) (bool, string, error) {
+	// Check if dirty
+	status, err := RunGit(repoPath, "status", "--porcelain")
+	if err != nil {
+		return false, "", err
+	}
+	isDirty := len(status) > 0
+
+	// Check ahead/behind
+	// git rev-list --left-right --count HEAD...@{u}
+	// Note: might fail if no upstream
+	ab, err := RunGit(repoPath, "rev-list", "--left-right", "--count", "HEAD...@{u}")
+	if err != nil {
+		return isDirty, "no upstream", nil
+	}
+
+	return isDirty, ab, nil
+}
+
+// BranchName returns the current branch name.
+func BranchName(repoPath string) (string, error) {
+	return RunGit(repoPath, "rev-parse", "--abbrev-ref", "HEAD")
 }
