@@ -1,17 +1,14 @@
 package tests
 
 import (
-<<<<<<< Updated upstream
-	"github.com/vedantprajapati/Grove/internal/manager"
-=======
-	"grove/internal/config"
-	"grove/internal/git"
-	"grove/internal/manager"
->>>>>>> Stashed changes
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/vedantprajapati/Grove/internal/config"
+	"github.com/vedantprajapati/Grove/internal/git"
+	"github.com/vedantprajapati/Grove/internal/manager"
 )
 
 func TestFullWorkflow(t *testing.T) {

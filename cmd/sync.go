@@ -2,13 +2,8 @@ package cmd
 
 import (
 	"fmt"
-<<<<<<< Updated upstream
-	"github.com/vedantprajapati/Grove/internal/git"
+
 	"github.com/vedantprajapati/Grove/internal/manager"
-	"path/filepath"
-=======
-	"grove/internal/manager"
->>>>>>> Stashed changes
 
 	"github.com/spf13/cobra"
 )

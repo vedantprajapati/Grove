@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"grove/internal/manager"
 	"strings"
+
+	"github.com/vedantprajapati/Grove/internal/manager"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
